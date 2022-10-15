@@ -3,7 +3,10 @@ package com.example.androidbluetoothtest;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -35,7 +38,9 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter mBTAdapter;
     private Set<BluetoothDevice> mPairedDevices;
     private ArrayList<String> btDeviceList = new ArrayList<>();
+    private ArrayList<String> btNewDeviceList = new ArrayList<>();
     ArrayAdapter<String> pairedDeviceAdapter;
+    ArrayAdapter<String> newDeviceAdapter;
 
     private Handler mHandler;
 
@@ -48,10 +53,12 @@ public class MainActivity extends AppCompatActivity {
 
 
         mBTAdapter = BluetoothAdapter.getDefaultAdapter(); // get a handle on the bluetooth radio
-
         pairedDeviceAdapter = new ArrayAdapter<>(getApplicationContext(),
                 android.R.layout.simple_list_item_1, btDeviceList);
         binding.listView.setAdapter(pairedDeviceAdapter);
+        newDeviceAdapter = new ArrayAdapter<>(getApplicationContext(),
+                android.R.layout.simple_list_item_1, btNewDeviceList);
+        binding.availableListView.setAdapter(newDeviceAdapter);
 
         if (mBTAdapter.isEnabled()) {
             binding.BtStatus.setText(getString(R.string.BTEnable));
@@ -67,6 +74,12 @@ public class MainActivity extends AppCompatActivity {
             bluetoothOff();
             pairedDeviceAdapter.clear();
             pairedDeviceAdapter.notifyDataSetChanged();
+            btNewDeviceList.clear();
+            newDeviceAdapter.notifyDataSetChanged();
+        });
+
+        binding.bluetoothScan.setOnClickListener(view -> {
+            discover();
         });
 
 
@@ -132,6 +145,58 @@ public class MainActivity extends AppCompatActivity {
                 binding.BtStatus.setText(getString(R.string.sBTdisabl));
         }
     }
+
+    private void discover() {
+        // Check if the device is already discovering
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        if (mBTAdapter.isDiscovering()) {
+            mBTAdapter.cancelDiscovery();
+            Toast.makeText(getApplicationContext(), getString(R.string.DisStop), Toast.LENGTH_SHORT).show();
+        } else {
+            if (mBTAdapter.isEnabled()) {
+                btDeviceList.clear(); // clear items
+                mBTAdapter.startDiscovery();
+                Toast.makeText(getApplicationContext(), getString(R.string.DisStart), Toast.LENGTH_SHORT).show();
+                IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+                filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+                registerReceiver(blReceiver, new IntentFilter(filter));
+            } else {
+                Toast.makeText(getApplicationContext(), getString(R.string.BTnotOn), Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    final BroadcastReceiver blReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                // add the name to the list
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return;
+                }
+                btNewDeviceList.add(device.getName() + "\n" + device.getAddress());
+            }
+            newDeviceAdapter.notifyDataSetChanged();
+        }
+    };
 
 
 }
